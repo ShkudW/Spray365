@@ -19,21 +19,17 @@
   <br>
 </p>
 
-# What is Spray365?
-Spray365 is a password spraying tool that identifies valid credentials for Microsoft accounts (Office 365 / Azure AD). How is Spray365 different from the many other password spraying tools that are already available? Spray365 enables passwords to be sprayed from an "execution plan". While having a pre-generated execution plan that describe the spraying operation well before it occurs has many other benefits that Spray365 leverages, this also allows password sprays to be resumed (`-R` option) after a network error or other interruption. While it is easiest to generate a Spray365 execution plan using Spray365 directly, other tools that produce a compatible JSON structure make it easy to build unique password spraying workflows. 
+# What's new in this fork??
+Spray365 is one of my go-to tools during Red Team engagements. It has proven invaluable on numerous occasions for establishing an initial foothold within an enterprise. I decided to further enhance its capabilities by integrating TOR routing. The primary objective is to maximize operational anonymity and prevent the exposure of my true source IP address.
 
-Spray365 exposes a few options that are useful when spraying credentials. Random user agents can be used to detect and bypass insecure conditional access policies that are configured to limit the types of allowed devices. Similarly, the `--shuffle_auth_order` argument is a great way to spray credentials in a less-predictable manner. This option was added in an attempt to bypass intelligent account lockouts (e.g., Azure Smart Lockout). While it’s not perfect, randomizing the order in which credentials are attempted have other benefits too, like making the detection of these spraying operations even more difficult. Spray365 also supports proxying traffic over HTTP/HTTPS, which integrates well with other tools like Burp Suite for manipulating the source of the spraying operation.
-
-### Generating an Execution Plan (Step 1)
-![Generating Execution Plan](screenshots/demo_generate.png)
-
-### Spraying Credentials with an Execution Plan (Step 2)
-![Spraying Execution Plan](screenshots/demo_spray.png)
-
-### Review Spray365 Results (Step 3)
-![Reviewing Password Spraying Results](screenshots/demo_review.png)
-
-## Getting Started
+### New flags:
+```
+  Tor options:
+    -t, --tor                   Send authentication requests through Tor, switching to a new exit IP before everyauthentication attempt
+    --tor_proxy                 SOCKS proxy of the Tor service (format: socks5h://tor.address:port)  [default:socks5h://127.0.0.1:9050]
+    --tor_control               Address and port of the Tor control service (format: tor.address:port)  [default:127.0.0.1:9051]
+    --tor_countries             Comma-separated list of 2 letter country codes to pick Tor exit IPs from (e.g.us,de,gb). Leave unspecified to use any country
+```
 
 ### Requirements
  - Python
@@ -43,60 +39,47 @@ Spray365 exposes a few options that are useful when spraying credentials. Random
 ### Installation
 Clone the repository, install the required Python packages, and run Spray365!
 ```bash
-$ git clone https://github.com/MarkoH17/Spray365
-$ cd Spray365
-~/Spray365$ pip3 install -r requirements.txt -U
-~/Spray365$ python3 spray365.py
+git clone https://github.com/MarkoH17/Spray365
+cd Spray365
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python3 spray365.py
+```
+
+### Configure tor:
+## Install tor:
+```
+sudo apt update
+sudo apt install torsocks -y
+sudo apt install libtorsocks0 -y
+```
+## editing tor config file /etc/tor/torrc:
+```
+ControlPort 9051
+CookieAuthentication 1
+```
+## Create symlink:
+```
+sudo ln -s /usr/lib/x86_64-linux-gnu/torsocks/libtorsocks.so /usr/lib/x86_64-linux-gnu/libtorsocks.so
+```
+## sudo systemctl restart tor@default:
+```
+sudo systemctl restart tor@default
 ```
 
 ### Usage
-#### Generate an Execution Plan (Normal)
-An execution plan is needed to spray credentials, so we need to create one! Spray365 can generate its own execution plan by running the generate command in "normal" mode: (`spray365.py generate normal`). See help (`spray365.py generate -h / spray365.py generate normal -h`) for more detail.
-```bash
-$ python3 spray365.py generate normal -ep <execution_plan_filename> -d <domain_name> -u <file_containing_usernames> -pf <file_containing_passwords>
+## Generate ep file (plan)
 ```
-e.g.
-```bash
-$ python3 spray365.py generate normal -ep ex-plan.s365 -d example.com -u usernames -pf passwords
+python3 spray365.py generate normal -ep Spray_Plan --delay 40 -d domain.com -u valid_UserAccount.txt  -p 'Aa123456' -rUA
 ```
 
-#### Generate an Execution Plan (Audit)
-Spray365 can also audit multifactor authentication (MFA) and conditional access policy configurations by spraying valid credentials. Audit-style execution plans attempt all combinations of User-Agent + AAD Client ID + AAD Endpoint ID for a given pair of credentials.
-
-Spray365 can generate an audit-style execution plan by running the generate command in "audit" mode: (`spray365.py generate audit`). See help (`spray365.py generate -h / spray365.py generate audit -h`) for more detail. While it is possible to provide a list of users and passwords separately (`-u` and `-pf`), these options better suit execution plans for password spraying (not auditing), which would likely cause many invalid login attempts. Instead, consider `-u / --user_file` with `--passwords_in_userfile`, which will instruct Spray365 to extract the passwords from "user_file" by splitting each line in the input file on a colon, where the value before the colon is treated as the username, and the value after the colon is treated as the password (e.g. `<username>:<password>`, `jsmith:Password01`). 
-
-```bash
-$ python3 spray365.py generate audit -ep <execution_plan_filename> -d <domain_name> -u <file_containing_usernames_and_passwords> --passwords_in_userfile
+## use TOR
 ```
-e.g.
-```bash
-$ python3 spray365.py generate audit -ep ex-plan.s365 -d example.com -u usernames --passwords_in_userfile
+python3 spray365.py spray -ep Spray_Plan -t --tor_countries il,us
 ```
 
-#### Spraying an Execution Plan
-Once an execution plan is created, Spray365 can be used to process it. Running Spray365 in "spray" (`spray365.py spray`) mode will process the specified execution plan and spray the appropriate credentials. All types of execution plans (normal and audit) can be processed in this mode. See help (`spray365.py spray -h`) for more detail.
-```bash
-$ python3 spray365.py spray -ep <execution_plan_filename>
-```
-e.g.
-```bash
-$ python3 spray365.py spray -ep ex-plan.s365
-```
 
-#### Reviewing the Results of a Spraying Operation
-After spraying credentials from an execution plan, Spray365 outputs a JSON file with the results. This file can be processed using other tools like JQ to gain insights about the spraying operation after it has occurred. However, Spray365 also includes a "review" command which can be used to learn about:
- - Valid (and invalid) Accounts
- - Valid (and invalid) Credentials
- - Partial Valid Credentials (Authentication succeeded, but access was prevented by MFA / Conditional Access Policies)
-
-See help (`spray365.py review -h`) for more detail.
-```bash
-$ python3 spray365.py review <spray_results_json_filename>
-```
-e.g.
-```bash
-$ python3 spray365.py review spray365_results_2022-05-20_18-58-31.json
-```
 
 ## Spray365 Usage
 
