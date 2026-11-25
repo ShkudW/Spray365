@@ -1,0 +1,7 @@
+click==8.1.*
+click_option_group==0.5.*
+colorama==0.4.*
+msal==1.17.*
+pysocks==1.7.*
+stem==1.8.*
+urllib3~=2.5.0
